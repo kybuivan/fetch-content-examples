@@ -8,7 +8,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake ${PROJECT_SOURCE_DIR}/
 include(freetype)
 include(glfw)
 include(glad)
-include(glm)
+include(cglm)
 
 file(GLOB _SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
@@ -22,7 +22,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     external::freetype
     external::glfw
     external::glad
-    external::glm
+    external::cglm
 )
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 
