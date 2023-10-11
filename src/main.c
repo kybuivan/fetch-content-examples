@@ -29,10 +29,11 @@ static const char* fragmentSource =
 "in vec3 Color;\n"
 "in vec2 Texcoord;\n"
 "out vec4 outColor;\n"
-"uniform sampler2D tex;\n"
+"uniform sampler2D texSample;\n"
+"uniform sampler2D texSheep;\n"
 "void main()\n"
 "{\n"
-"    outColor = texture(tex, Texcoord) * vec4(Color, 1.0);\n"
+"    outColor = mix(texture(texSample, Texcoord), texture(texSheep, Texcoord), 0.5);\n"
 "}\n";
 
 static void error_callback(int error, const char* description)
@@ -180,8 +181,15 @@ int main(void)
     glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void*)(5 * sizeof(GLfloat)));
 
     // Load texture
-    GLuint tex = loadTexture("res/sample.png");
-    GLuint sheep = loadTexture("res/sheep.png");
+    // Load textures
+    GLuint textures[2];
+    glActiveTexture(GL_TEXTURE0);
+    textures[0] = loadTexture("res/sample.png");
+    glUniform1i(glGetUniformLocation(shaderProgram, "texSample"), 0);
+
+    glActiveTexture(GL_TEXTURE1);
+    textures[1] = loadTexture("res/sheep.png");
+    glUniform1i(glGetUniformLocation(shaderProgram, "texSheep"), 1);
 
     while (!glfwWindowShouldClose(window))
     {
@@ -198,8 +206,7 @@ int main(void)
     glDeleteProgram(shaderProgram);
     glDeleteShader(fragmentShader);
     glDeleteShader(vertexShader);
-    glDeleteTextures(1, &tex);
-    glDeleteTextures(1, &sheep);
+    glDeleteTextures(2, textures);
 
     glDeleteBuffers(1, &ebo);
     glDeleteBuffers(1, &vbo);
