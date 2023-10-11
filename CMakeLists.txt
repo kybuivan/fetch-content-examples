@@ -9,6 +9,7 @@ include(freetype)
 include(glfw)
 include(glad)
 include(cglm)
+include(stb)
 
 file(GLOB _SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
@@ -23,6 +24,7 @@ target_link_libraries(${PROJECT_NAME} PUBLIC
     external::glfw
     external::glad
     external::cglm
+    external::stb
 )
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
 

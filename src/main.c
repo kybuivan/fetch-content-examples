@@ -7,37 +7,32 @@
 
 #include <cglm/cglm.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
-static const struct
-{
-    float x, y;
-    float r, g, b;
-} vertices[3] =
-{
-    { -0.6f, -0.4f, 1.f, 0.f, 0.f },
-    {  0.6f, -0.4f, 0.f, 1.f, 0.f },
-    {   0.f,  0.6f, 0.f, 0.f, 1.f }
-};
-
-static const char* vertex_shader_text =
-"#version 330 core\n"
-"uniform mat4 MVP;\n"
-"in vec3 vCol;\n"
-"in vec2 vPos;\n"
-"out vec3 color;\n"
-"void main()\n"
-"{\n"
-"    gl_Position = MVP * vec4(vPos, 0.0, 1.0);\n"
-"    color = vCol;\n"
-"}\n";
-
-static const char* fragment_shader_text =
+static const char* vertexSource =
 "#version 330 core\n"
 "in vec3 color;\n"
-"out vec4 FragColor;\n"
+"in vec2 position;\n"
+"in vec2 texcoord;\n"
+"out vec3 Color;\n"
+"out vec2 Texcoord;\n"
 "void main()\n"
 "{\n"
-"    FragColor = vec4(color, 1.0);\n"
+"    gl_Position = vec4(position, 0.0, 1.0);\n"
+"    Texcoord = texcoord;\n"
+"    Color = color;\n"
+"}\n";
+
+static const char* fragmentSource =
+"#version 330 core\n"
+"in vec3 Color;\n"
+"in vec2 Texcoord;\n"
+"out vec4 outColor;\n"
+"uniform sampler2D tex;\n"
+"void main()\n"
+"{\n"
+"    outColor = texture(tex, Texcoord) * vec4(Color, 1.0);\n"
 "}\n";
 
 static void error_callback(int error, const char* description)
@@ -49,6 +44,45 @@ static void key_callback(GLFWwindow* window, int key, int scancode, int action, 
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
         glfwSetWindowShouldClose(window, GLFW_TRUE);
+}
+
+GLuint loadTexture(const char* filePath)
+{
+    int width, height, nrChannels;
+    unsigned char* image = stbi_load(filePath, &width, &height, &nrChannels, 0);
+
+    if (!image)
+    {
+        fprintf(stderr, "Failed to load image: %s\n", filePath);
+        return 0; // Return 0 to indicate a failed texture load
+    }
+
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    if (nrChannels == 3)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+    }
+    else if (nrChannels == 4)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
+    }
+
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Set texture parameters (optional)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    // Set texture wrap mode (optional)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    stbi_image_free(image); // Free the image data after uploading it to OpenGL
+
+    return texture; // Return the texture ID
 }
 
 int main(void)
@@ -82,66 +116,95 @@ int main(void)
     }
     glfwSwapInterval(1);
 
-    GLuint vertex_array, vertex_buffer, vertex_shader, fragment_shader, program;
-    GLint mvp_location, vpos_location, vcol_location;
+    // Create Vertex Array Object
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
 
-    glGenVertexArrays(1, &vertex_array);
-    glBindVertexArray(vertex_array);
+    // Create a Vertex Buffer Object and copy the vertex data to it
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
 
-    glGenBuffers(1, &vertex_buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, vertex_buffer);
+    GLfloat vertices[] = {
+    //  Position      Color             Texcoords
+        -0.5f,  0.5f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, // Top-left
+         0.5f,  0.5f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, // Top-right
+         0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, // Bottom-right
+        -0.5f, -0.5f, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f  // Bottom-left
+    };
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    glShaderSource(vertex_shader, 1, &vertex_shader_text, NULL);
-    glCompileShader(vertex_shader);
+    // Create an element array
+    GLuint ebo;
+    glGenBuffers(1, &ebo);
 
-    fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragment_shader, 1, &fragment_shader_text, NULL);
-    glCompileShader(fragment_shader);
+    GLuint elements[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
 
-    program = glCreateProgram();
-    glAttachShader(program, vertex_shader);
-    glAttachShader(program, fragment_shader);
-    glLinkProgram(program);
-    glUseProgram(program);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(elements), elements, GL_STATIC_DRAW);
 
-    mvp_location = glGetUniformLocation(program, "MVP");
-    vpos_location = glGetAttribLocation(program, "vPos");
-    vcol_location = glGetAttribLocation(program, "vCol");
+    // Create and compile the vertex shader
+    GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexSource, NULL);
+    glCompileShader(vertexShader);
 
-    glEnableVertexAttribArray(vpos_location);
-    glVertexAttribPointer(vpos_location, 2, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), (void*) 0);
-    glEnableVertexAttribArray(vcol_location);
-    glVertexAttribPointer(vcol_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertices[0]), (void*) (sizeof(float) * 2));
+    // Create and compile the fragment shader
+    GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
+    glCompileShader(fragmentShader);
+
+    // Link the vertex and fragment shader into a shader program
+    GLuint shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertexShader);
+    glAttachShader(shaderProgram, fragmentShader);
+    glBindFragDataLocation(shaderProgram, 0, "outColor");
+    glLinkProgram(shaderProgram);
+    glUseProgram(shaderProgram);
+
+    // Specify the layout of the vertex data
+    GLint posAttrib = glGetAttribLocation(shaderProgram, "position");
+    glEnableVertexAttribArray(posAttrib);
+    glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), 0);
+
+    GLint colAttrib = glGetAttribLocation(shaderProgram, "color");
+    glEnableVertexAttribArray(colAttrib);
+    glVertexAttribPointer(colAttrib, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void*)(2 * sizeof(GLfloat)));
+
+    GLint texAttrib = glGetAttribLocation(shaderProgram, "texcoord");
+    glEnableVertexAttribArray(texAttrib);
+    glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, 7 * sizeof(GLfloat), (void*)(5 * sizeof(GLfloat)));
+
+    // Load texture
+    GLuint tex = loadTexture("res/sample.png");
+    GLuint sheep = loadTexture("res/sheep.png");
 
     while (!glfwWindowShouldClose(window))
     {
-        int width, height;
-        glfwGetFramebufferSize(window, &width, &height);
-        float ratio = (float)width / height;
-
-        glViewport(0, 0, width, height);
+        // Clear the screen to black
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        mat4 m, p, mvp;
-        glm_mat4_identity(m);
-        glm_rotate_z(m, (float)glfwGetTime(), m);
-        glm_ortho(-ratio, ratio, -1.0f, 1.0f, 1.0f, -1.0f, p);
-        glm_mat4_mul(p, m, mvp);
-
-        glUniformMatrix4fv(mvp_location, 1, GL_FALSE, (const GLfloat*)mvp);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        // Draw a rectangle from the 2 triangles using 6 indices
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+    glDeleteProgram(shaderProgram);
+    glDeleteShader(fragmentShader);
+    glDeleteShader(vertexShader);
+    glDeleteTextures(1, &tex);
+    glDeleteTextures(1, &sheep);
 
-    glDeleteProgram(program);
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
-    glDeleteBuffers(1, &vertex_buffer);
-    glDeleteVertexArrays(1, &vertex_array);
+    glDeleteBuffers(1, &ebo);
+    glDeleteBuffers(1, &vbo);
+
+    glDeleteVertexArrays(1, &vao);
 
     glfwDestroyWindow(window);
     glfwTerminate();
