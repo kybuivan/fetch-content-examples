@@ -184,11 +184,11 @@ int main(void)
     // Load textures
     GLuint textures[2];
     glActiveTexture(GL_TEXTURE0);
-    textures[0] = loadTexture("res/sample.png");
+    textures[0] = loadTexture("assets/images/sample.png");
     glUniform1i(glGetUniformLocation(shaderProgram, "texSample"), 0);
 
     glActiveTexture(GL_TEXTURE1);
-    textures[1] = loadTexture("res/sheep.png");
+    textures[1] = loadTexture("assets/images/sheep.png");
     glUniform1i(glGetUniformLocation(shaderProgram, "texSheep"), 1);
 
     while (!glfwWindowShouldClose(window))
